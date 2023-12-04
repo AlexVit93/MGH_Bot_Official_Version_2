@@ -1,3 +1,4 @@
+
 import asyncpg
 import os
 from docs import generate_and_upload
@@ -7,20 +8,20 @@ from utils import question_mapping, child_mapping, answer_mapping, child_answer_
 
 
 async def create_pool():
-    DATABASE_URL = os.environ.get("DATABASE_URL")
-    return await asyncpg.create_pool(DATABASE_URL, ssl="require")
-    #     return await asyncpg.create_pool(
-    #     user="postgres",
-    #     password="1234",
-    #     database="postgres",
-    #     host="localhost",
-    # )
+    # DATABASE_URL = os.environ.get("DATABASE_URL")
+    # return await asyncpg.create_pool(DATABASE_URL, ssl="require")
+        return await asyncpg.create_pool(
+        user="postgres",
+        password="1234",
+        database="postgres",
+        host="localhost",
+    )
 
 
 async def create_table(conn):
     await conn.execute(
         """
-    CREATE TABLE IF NOT EXISTS mains_users_special (
+    CREATE TABLE IF NOT EXISTS mains_users_special_1 (
         user_id SERIAL PRIMARY KEY,
         name VARCHAR(100),
         phone_number VARCHAR(40),
@@ -77,7 +78,7 @@ async def save_user_data(
     try:
         result = await conn.execute(
             """
-            INSERT INTO mains_users_special (user_id, name, phone_number, gender, age, child_answers, answers, recommendations)
+            INSERT INTO mains_users_special_1 (user_id, name, phone_number, gender, age, child_answers, answers, recommendations)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (user_id) DO UPDATE
             SET name = EXCLUDED.name,
@@ -118,4 +119,4 @@ async def save_user_data(
 
 
 async def get_user_data(conn, user_id):
-    return await conn.fetchrow("SELECT * FROM mains_users_special WHERE user_id = $1;", user_id)
+    return await conn.fetchrow("SELECT * FROM mains_users_special_1 WHERE user_id = $1;", user_id)
