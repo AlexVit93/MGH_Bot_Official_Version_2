@@ -1,4 +1,3 @@
-
 import asyncpg
 import os
 from docs import generate_and_upload
@@ -8,20 +7,20 @@ from utils import question_mapping, child_mapping, answer_mapping, child_answer_
 
 
 async def create_pool():
-    # DATABASE_URL = os.environ.get("DATABASE_URL")
-    # return await asyncpg.create_pool(DATABASE_URL, ssl="require")
-        return await asyncpg.create_pool(
-        user="postgres",
-        password="1234",
-        database="postgres",
-        host="localhost",
-    )
+    DATABASE_URL = os.environ.get("DATABASE_URL")
+    return await asyncpg.create_pool(DATABASE_URL, ssl="require")
+    #     return await asyncpg.create_pool(
+    #     user="postgres",
+    #     password="1234",
+    #     database="postgres",
+    #     host="localhost",
+    # )
 
 
 async def create_table(conn):
     await conn.execute(
         """
-    CREATE TABLE IF NOT EXISTS mains_users_special_1 (
+    CREATE TABLE IF NOT EXISTS potencial_users (
         user_id SERIAL PRIMARY KEY,
         name VARCHAR(100),
         phone_number VARCHAR(40),
@@ -29,13 +28,17 @@ async def create_table(conn):
         age VARCHAR(30),
         child_answers JSONB,  
         answers JSONB,
-        recommendations JSONB
+        recommendations JSONB,
+        agreement_accepted BOOLEAN DEFAULT FALSE,
+        contact_accepted BOOLEAN DEFAULT FALSE
     );
     """
     )
 
 
 def transform_answers(answers):
+    if answers is None:
+        return {}, {}
     readable_answers = {}
     readable_child_answers = {}
     for key, value in answers.items():
@@ -60,7 +63,7 @@ def transform_answers(answers):
 
 
 async def save_user_data(
-    conn, user_id, name, phone_number, gender, age, child_answers, answers, recommendations
+    conn, user_id, name, phone_number, gender, age, child_answers, answers, recommendations, agreement_accepted, contact_accepted
 ):
     logging.info(f"Saving data for user {user_id}...")
     gender = gender_mapping.get(gender, "Неизвестно")
@@ -78,8 +81,8 @@ async def save_user_data(
     try:
         result = await conn.execute(
             """
-            INSERT INTO mains_users_special_1 (user_id, name, phone_number, gender, age, child_answers, answers, recommendations)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO potencial_users (user_id, name, phone_number, gender, age, child_answers, answers, recommendations, agreement_accepted, contact_accepted)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             ON CONFLICT (user_id) DO UPDATE
             SET name = EXCLUDED.name,
                 phone_number = EXCLUDED.phone_number,
@@ -87,7 +90,9 @@ async def save_user_data(
                 age = EXCLUDED.age,
                 child_answers = EXCLUDED.child_answers,    
                 answers = EXCLUDED.answers,
-                recommendations = EXCLUDED.recommendations;
+                recommendations = EXCLUDED.recommendations,
+                agreement_accepted = EXCLUDED.agreement_accepted,
+                contact_accepted = EXCLUDED.contact_accepted;
             """,
             user_id,
             name,
@@ -97,6 +102,8 @@ async def save_user_data(
             json_child_answers,
             json_answers,
             json_recommendations,
+            agreement_accepted,
+            contact_accepted
         )
         logging.info(f"Query result: {result}")
 
@@ -113,10 +120,12 @@ async def save_user_data(
         "child_answers": readable_child_answers,
         "answers": readable_answers,
         "recommendations": recommendations,
+        "agreement_accepted": agreement_accepted,
+        "contact_accepted": contact_accepted,
     }
 
     generate_and_upload(data)
 
 
 async def get_user_data(conn, user_id):
-    return await conn.fetchrow("SELECT * FROM mains_users_special_1 WHERE user_id = $1;", user_id)
+    return await conn.fetchrow("SELECT * FROM potencial_users WHERE user_id = $1;", user_id)

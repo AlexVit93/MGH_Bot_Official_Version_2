@@ -10,6 +10,9 @@ def create_docx(data):
     doc = Document()
     doc.add_paragraph(f"User ID: {data['user_id']}")
     doc.add_paragraph(f"Name: {data['name']}")
+    if data.get('contact_accepted'):
+        contact_text = 'Да'
+    doc.add_paragraph(f"Согласие на передачу контакта: {contact_text}")
     doc.add_paragraph(f"Phone_number: {data['phone_number']}")
     doc.add_paragraph(f"Gender: {data['gender']}")
     doc.add_paragraph(f"Age: {data['age']}")
