@@ -18,16 +18,57 @@ from spec_rec import middle_and_old, youngest
 @dp.message_handler(commands="start", state="*")
 async def user_name(message: types.Message):
     await Questionnaire.Name.set()
-    await message.answer("Ваше имя?")
+    await message.answer("Ваше имя?", reply_markup=ReplyKeyboardRemove())
+
 
 @dp.message_handler(state=Questionnaire.Name)
 async def phone(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
-    await Questionnaire.Phone.set()
+    await Questionnaire.Agreement.set()
     markup = InlineKeyboardMarkup()
-    btn_share = InlineKeyboardButton("Поделиться контактом", callback_data="share_contact")
-    markup.add(btn_share)
-    await message.answer("Приятно познакомиться! Для того, чтобы продолжить, мне нужен ваш контактный номер.", reply_markup=markup)
+    btn_read_agreement = InlineKeyboardButton("Прочитать", url="https://docs.google.com/document/d/1g9OF0HWJPM_AQvasg8L6znVNz4ge6FId/edit?usp=sharing&ouid=112455147526985757928&rtpof=true&sd=true")
+    btn_confirm_agreement = InlineKeyboardButton("Ознакомлен/а", callback_data="agreement_confirmed")
+    markup.add(btn_read_agreement, btn_confirm_agreement)
+    await message.answer("Приятно познакомиться! Прежде, чем продолжить, вам необходимо ознакомиться с договором и его подтвердить", reply_markup=markup)
+
+@dp.message_handler(lambda message: not message.text.startswith('/'), state='*')
+async def handle_unexpected_text(message: types.Message, state: FSMContext):
+    current_state = await state.get_state()
+    if current_state != Questionnaire.Name.state:
+        await message.reply("Ручной ввод, кроме ввода имени, недоступен.")
+
+
+@dp.callback_query_handler(lambda c: c.data == "agreement_confirmed", state=Questionnaire.Agreement)
+async def agreement_confirmed(callback_query: types.CallbackQuery, state: FSMContext):
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("Да", callback_data="contact_agree"),
+               InlineKeyboardButton("Нет", callback_data="contact_disagree"))
+    await callback_query.message.answer("Вы подтверждаете свое согласие на передачу контакта?", reply_markup=markup)
+    await Questionnaire.ContactConfirmation.set()
+
+@dp.callback_query_handler(lambda c: c.data == "contact_agree", state=Questionnaire.ContactConfirmation)
+async def contact_agree(callback_query: types.CallbackQuery, state: FSMContext):
+    await Questionnaire.Phone.set()
+    await prompt_share_contact(callback_query)
+
+@dp.callback_query_handler(lambda c: c.data == "contact_disagree", state=Questionnaire.ContactConfirmation)
+async def contact_disagree(callback_query: types.CallbackQuery, state: FSMContext):
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("Да", callback_data="repeat_agreement_yes"),
+               InlineKeyboardButton("Нет", callback_data="repeat_agreement_no"))
+    await callback_query.message.answer("Вы ознакомились с договором?", reply_markup=markup)
+    await Questionnaire.AgreementRepeat.set()
+
+@dp.callback_query_handler(lambda c: c.data == "repeat_agreement_yes", state=Questionnaire.AgreementRepeat)
+async def repeat_agreement_yes(callback_query: types.CallbackQuery, state: FSMContext):
+    await Questionnaire.Agreement.set()
+    await agreement_confirmed(callback_query, state)
+
+@dp.callback_query_handler(lambda c: c.data == "repeat_agreement_no", state=Questionnaire.AgreementRepeat)
+async def repeat_agreement_no(callback_query: types.CallbackQuery, state: FSMContext):
+    await Questionnaire.ContactConfirmation.set()
+    await contact_disagree(callback_query, state)
+
 
 @dp.callback_query_handler(lambda c: c.data == "share_contact", state=Questionnaire.Phone)
 async def prompt_share_contact(callback_query: types.CallbackQuery):
@@ -39,7 +80,7 @@ async def prompt_share_contact(callback_query: types.CallbackQuery):
     markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     button_phone = KeyboardButton(text="Отправить мой номер телефона", request_contact=True)
     markup.add(button_phone)
-    await callback_query.message.answer("Нажмите кнопку ниже, чтобы отправить ваш контакт.", reply_markup=markup)
+    await callback_query.message.answer("Нажмите кнопку ниже, чтобы отправить ваш контакт. Если её нет - нажмите на элемент меню(на картинке показана примерная иконка).", reply_markup=markup)
 
 @dp.message_handler(Regexp(r'^\+?\d{10,15}$'), state=Questionnaire.Phone)
 async def handle_wrong_phone_input(message: types.Message):
